@@ -1,3 +1,6 @@
+'''
+This script walks a repository, extracts selected source files, and splits the output into prompt-sized text chunks
+'''
 import os
 import argparse
 
@@ -112,3 +115,4 @@ if __name__ == "__main__":
         include_dirs=args.include,
         exclude_dirs=final_excludes
     )
+
