@@ -1,3 +1,37 @@
+"""
+tree_full.py
+
+A command-line utility that prints a full recursive directory tree starting from
+the current working directory.
+
+Features:
+- Recursive traversal of all subdirectories
+- Exclusion of common or user-defined folders (e.g., venv, .git)
+- Optional root-level include filter to show only selected directories/files
+- Clean tree-style visual formatting
+
+Usage:
+    python tree_full.py
+    python tree_full.py --exclude venv,.git
+    python tree_full.py --include-only src,tests
+    python tree_full.py --exclude venv,.git --include-only src
+
+Arguments:
+    -e, --exclude        Comma-separated directory names to exclude
+    -io, --include-only  Comma-separated names to include at root level only
+
+Examples:
+    python tree_full.py --exclude venv,.git
+    python tree_full.py --include-only src,tools
+    python tree_full.py -e node_modules,.git -io backend
+
+Useful for:
+- Auditing project structures
+- Preparing architecture documentation
+- Debugging file layouts
+- Sharing repository layouts
+"""
+
 import os
 import argparse
 
@@ -91,3 +125,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
