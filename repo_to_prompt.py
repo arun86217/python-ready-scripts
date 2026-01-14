@@ -1,6 +1,40 @@
-'''
-This script walks a repository, extracts selected source files, and splits the output into prompt-sized text chunks
-'''
+"""
+repo_to_prompt.py
+
+Exports the contents of a code repository into structured, prompt-ready text files.
+The script walks a directory tree, extracts selected source files, and writes them
+into numbered output files with clear file boundaries.
+
+Features:
+- Extension-based file filtering
+- Include-only directory scoping
+- Automatic exclusion of common environment and build folders
+- Automatic splitting into multiple output files by line count
+
+Output:
+    full_code_part_001.txt
+    full_code_part_002.txt
+    ...
+
+Usage:
+    python repo_to_prompt.py
+    python repo_to_prompt.py --root .
+    python repo_to_prompt.py --exclude venv .git
+    python repo_to_prompt.py --include src utils
+    python repo_to_prompt.py --root myrepo --include src --exclude venv .git
+
+Arguments:
+    --root        Root directory to scan (default: current directory)
+    --include     Space-separated directories to include
+    --exclude     Space-separated directories to exclude
+
+Designed for:
+- LLM prompt preparation
+- Codebase archiving
+- Offline review of repositories
+- Dataset generation
+"""
+
 import os
 import argparse
 
@@ -115,4 +149,5 @@ if __name__ == "__main__":
         include_dirs=args.include,
         exclude_dirs=final_excludes
     )
+
 
