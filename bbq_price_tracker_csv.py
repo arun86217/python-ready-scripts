@@ -37,19 +37,24 @@ def parse_date(value: str) -> datetime.date:
         raise argparse.ArgumentTypeError("Date must be YYYY-MM-DD or 'today'")
 
 
-def get_slots(date_str: str, dinner_type: str):
+def get_slots(session: requests.Session, date_str: str, dinner_type: str):
     time.sleep(REQUEST_DELAY)
     payload = {
         "reservation_date": date_str,
         "branch_id": BRANCH_ID,
         "dinner_type": dinner_type,
     }
-    r = requests.post(SLOT_URL, json=payload)
+    r = session.post(SLOT_URL, json=payload, timeout=20)
     r.raise_for_status()
     return r.json()["results"]["preferred_branch"]["slots_available"]
 
 
-def fetch_bigbuffet_nonveg(date_str: str, slot_id: str, reservation_time: str):
+def fetch_bigbuffet_nonveg(
+    session: requests.Session,
+    date_str: str,
+    slot_id: str,
+    reservation_time: str,
+):
     time.sleep(REQUEST_DELAY)
     payload = {
         "branch_id": BRANCH_ID,
@@ -58,7 +63,7 @@ def fetch_bigbuffet_nonveg(date_str: str, slot_id: str, reservation_time: str):
         "reservation_time": reservation_time,
     }
 
-    r = requests.post(BUFFET_URL, json=payload)
+    r = session.post(BUFFET_URL, json=payload, timeout=20)
     r.raise_for_status()
 
     for b in r.json()["results"]["buffets"]["buffet_data"]:
@@ -115,16 +120,28 @@ def main() -> None:
 
     pivot = OrderedDict()
 
-    for date in date_range(start, end):
-        print(f"Processing {date}")
-        pivot[date] = {}
+    with requests.Session() as session:
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        })
 
-        all_slots = get_slots(date, "LUNCH")
+        for date in date_range(start, end):
+            print(f"Processing {date}")
+            pivot[date] = {}
 
-        for s in all_slots:
-            price = fetch_bigbuffet_nonveg(date, s["slot_id"], s["slot_start_time"])
-            if price is not None:
-                pivot[date][s["slot_start_time"]] = price
+            all_slots = get_slots(session, date, "LUNCH")
+
+            for s in all_slots:
+                price = fetch_bigbuffet_nonveg(
+                    session,
+                    date,
+                    s["slot_id"],
+                    s["slot_start_time"],
+                )
+                if price is not None:
+                    pivot[date][s["slot_start_time"]] = price
 
     build_csv(pivot)
 
