@@ -1,4 +1,3 @@
-```python
 """
 branches_to_files.py — Generate directory and file structures from tree layouts
 
@@ -161,4 +160,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
