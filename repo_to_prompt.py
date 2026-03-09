@@ -1,29 +1,59 @@
 """
 repo_to_prompt.py
 
-Exports repository source files into structured prompt-ready text.
-
-Adds clipboard functionality.
+Exports the contents of a code repository into structured, prompt-ready text files.
+The script walks a directory tree, extracts selected source files, and writes them
+into numbered output files with clear file boundaries.
 
 Features
-- Export repo code into segmented text files
-- Copy entire export to clipboard
-- Optional clipboard-only mode
-- Extension filtering
-- Include / exclude directory filtering
+- Extension-based file filtering (dynamic include/exclude)
+- File-level filtering (include/exclude specific files)
+- Directory-level filtering (include/exclude folders)
+- Automatic exclusion of common environment and build folders
+- Automatic splitting into multiple output files by line count
+- Clipboard export support
+- Clipboard-only export mode
+- Deterministic ordering for reproducibility
+
+Output
+    full_code_part_001.txt
+    full_code_part_002.txt
+    ...
 
 Usage
 
-Create text files
-python repo_to_prompt.py
+Default (uses built-in defaults)
+    python repo_to_prompt.py
 
-Create text files + copy to clipboard
-python repo_to_prompt.py -c
-python repo_to_prompt.py --clipboard
+Clipboard + files
+    python repo_to_prompt.py -c
 
-Only copy to clipboard (no text files)
-python repo_to_prompt.py -oc
-python repo_to_prompt.py --only-clipboard
+Clipboard only
+    python repo_to_prompt.py -oc
+
+Include only certain directories
+    python repo_to_prompt.py -id src utils
+
+Exclude directories
+    python repo_to_prompt.py -ed venv node_modules build
+
+Include extensions
+    python repo_to_prompt.py -ie py go js
+
+Exclude extensions
+    python repo_to_prompt.py -ee md txt
+
+Include specific files
+    python repo_to_prompt.py -if main.py config.py
+
+Exclude specific files
+    python repo_to_prompt.py -ef test.py
+
+Designed for
+- LLM prompt preparation
+- Codebase archiving
+- Offline review of repositories
+- Dataset generation
 """
 
 import os
@@ -39,29 +69,64 @@ DEFAULT_EXCLUDE_DIRS = {
     "venv", ".git", "__pycache__", "node_modules", ".idea", ".vscode", "vevn"
 }
 
-INCLUDE_EXTENSIONS = (
-    ".py", ".txt", ".md", ".json", ".yaml", ".yml",
-    ".sql", ".go", ".sum", ".mod"
-)
+DEFAULT_EXTENSIONS = {
+    ".py", ".txt", ".md", ".json", ".yaml", ".yml", ".sql", ".go", ".sum", ".mod"
+}
 
 LINES_PER_FILE = 1200
+
+
+def normalize_extensions(ext_list):
+    result = set()
+    for e in ext_list or []:
+        if not e.startswith("."):
+            e = "." + e
+        result.add(e.lower())
+    return result
+
+
+def is_text_file(path, blocksize=512):
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(blocksize)
+        if b"\0" in chunk:
+            return False
+        return True
+    except Exception:
+        return False
 
 
 def repo_to_prompt(
     root=".",
     include_dirs=None,
     exclude_dirs=None,
+    include_files=None,
+    exclude_files=None,
+    include_ext=None,
+    exclude_ext=None,
     copy_clipboard=False,
     only_clipboard=False
 ):
 
     repo_name = os.path.basename(os.path.abspath(root))
+    part = 1
+    line_count = 0
 
     include_dirs = {os.path.normpath(d) for d in (include_dirs or [])}
     exclude_dirs = set(exclude_dirs or [])
 
-    part = 1
-    line_count = 0
+    include_files = set(include_files or [])
+    exclude_files = set(exclude_files or [])
+
+    include_ext = normalize_extensions(include_ext)
+    exclude_ext = normalize_extensions(exclude_ext)
+
+    if include_ext:
+        extensions = include_ext
+    else:
+        extensions = DEFAULT_EXTENSIONS.copy()
+
+    extensions = {e for e in extensions if e not in exclude_ext}
 
     clipboard_buffer = []
 
@@ -78,11 +143,17 @@ def repo_to_prompt(
 
     if not only_clipboard:
         out = open_new_file(part)
-        out.write(f"REPOSITORY: {repo_name}\n\n")
+        header = f"REPOSITORY: {repo_name}\n\n"
+        out.write(header)
+        clipboard_buffer.append(header)
 
-    clipboard_buffer.append(f"REPOSITORY: {repo_name}\n\n")
+    else:
+        clipboard_buffer.append(f"REPOSITORY: {repo_name}\n\n")
 
     for dirpath, dirnames, filenames in os.walk(root):
+
+        dirnames.sort()
+        filenames.sort()
 
         rel_dir = os.path.normpath(os.path.relpath(dirpath, root))
 
@@ -103,12 +174,23 @@ def repo_to_prompt(
 
         for filename in filenames:
 
+            if include_files and filename not in include_files:
+                continue
+
+            if filename in exclude_files:
+                continue
+
+            ext = os.path.splitext(filename)[1].lower()
+
+            if ext not in extensions:
+                continue
+
             full_path = os.path.join(dirpath, filename)
 
             if not is_under_included_dir(full_path):
                 continue
 
-            if not filename.endswith(INCLUDE_EXTENSIONS):
+            if not is_text_file(full_path):
                 continue
 
             rel_path = os.path.relpath(full_path, root)
@@ -147,8 +229,9 @@ def repo_to_prompt(
         out.close()
 
     if copy_clipboard or only_clipboard:
+
         if pyperclip is None:
-            raise RuntimeError("pyperclip required. Install using: pip install pyperclip")
+            raise RuntimeError("Clipboard support requires: pip install pyperclip")
 
         full_text = "".join(clipboard_buffer)
         pyperclip.copy(full_text)
@@ -166,20 +249,31 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root", default=".")
-    parser.add_argument("--include", nargs="*")
-    parser.add_argument("--exclude", nargs="*")
+
+    parser.add_argument("-id", "--include-dir", nargs="*")
+    parser.add_argument("-ed", "--exclude-dir", nargs="*")
+
+    parser.add_argument("-if", "--include-file", nargs="*")
+    parser.add_argument("-ef", "--exclude-file", nargs="*")
+
+    parser.add_argument("-ie", "--include-ext", nargs="*")
+    parser.add_argument("-ee", "--exclude-ext", nargs="*")
 
     parser.add_argument("-c", "--clipboard", action="store_true")
     parser.add_argument("-oc", "--only-clipboard", action="store_true")
 
     args = parser.parse_args()
 
-    final_excludes = DEFAULT_EXCLUDE_DIRS.union(args.exclude or [])
+    final_excludes = DEFAULT_EXCLUDE_DIRS.union(args.exclude_dir or [])
 
     repo_to_prompt(
         root=args.root,
-        include_dirs=args.include,
+        include_dirs=args.include_dir,
         exclude_dirs=final_excludes,
+        include_files=args.include_file,
+        exclude_files=args.exclude_file,
+        include_ext=args.include_ext,
+        exclude_ext=args.exclude_ext,
         copy_clipboard=args.clipboard,
         only_clipboard=args.only_clipboard
     )
