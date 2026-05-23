@@ -70,7 +70,7 @@ DEFAULT_EXCLUDE_DIRS = {
 }
 
 DEFAULT_EXTENSIONS = {
-    ".py", ".txt", ".md", ".json", ".yaml", ".yml", ".sql", ".go", ".sum", ".mod"
+    ".py", ".txt", ".md", ".json", ".yaml", ".yml", ".sql", ".go", ".sum", ".mod",".php",".html",
 }
 
 LINES_PER_FILE = 1200
